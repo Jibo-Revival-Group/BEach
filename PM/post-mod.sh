@@ -370,7 +370,18 @@ echo "Done."
 echo ""
 
 # ---------------------------------------------------------------------------
-echo "=== Step 9: Reboot ==="
+echo "=== Step 9: Update BBFW ==="
+pkill -f "jibo"
+echo ""
+echo "Flashing BBFW... You may see a lot of random symbols"
+echo ""
+sleep 2 # wait for jibo to die
+jibo-bbfw-update
+echo "Done."
+echo ""
+
+# ---------------------------------------------------------------------------
+echo "=== Step 10: Reboot ==="
 echo "Mode change requires a reboot. Rebooting now..."
 echo ""
 echo ""
