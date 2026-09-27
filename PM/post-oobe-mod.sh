@@ -178,6 +178,7 @@ fi
 
 echo "Fixing permissions..."
 chmod 777 -R /opt/jibo/Jibo/Skills/
+chmod +x -R /usr/local/bin
 # Jetstream needs to be public
 chmod 777 /usr/local/etc/jibo-jetstream-service.json
 
