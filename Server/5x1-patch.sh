@@ -10,9 +10,9 @@ OTA_ENDPOINT="http://joap.5x1.com:80"
 HUB_HOST="api.5x1.com"
 HUB_PORT="443"
 
-echo "--- Jibo OpenJibo CA & Server Configurator ---"
-echo "Target Hub: $HUB_HOST:$HUB_PORT"
-echo "OTA/loop endpoint: $OTA_ENDPOINT"
+echo "--- Jibo BEefy CA and server configurator ---"
+echo "Target hub: $HUB_HOST:$HUB_PORT (BEefy)"
+echo "OTA/loop endpoint: $OTA_ENDPOINT (BEaker)"
 echo "---------------------------------------------"
 
 # 1. Remount filesystems as Read-Write
@@ -136,6 +136,31 @@ with open(path, 'w') as f:
 print('endpoint -> ' + endpoint)
 "
 fi
+
+# Point classic HTTPS and the notification socket at BEefy.
+echo "Pointing region config at api.5x1.com..."
+python << 'PY'
+import json, os
+paths = [
+    "/usr/local/bin/jibo-ssm/node_modules/@jibo/jibo-server-client/lib/region_config.json",
+    "/usr/lib/node_modules/@jibo/jibo-server-client/lib/region_config.json",
+]
+pattern = {
+    "endpoint": "https://api.5x1.com",
+    "wsendpoint": "wss://api.5x1.com",
+    "globalEndpoint": True,
+}
+for path in paths:
+    if not os.path.isfile(path):
+        continue
+    with open(path, "r") as handle:
+        data = json.load(handle)
+    data.setdefault("patterns", {})["globalSSL"] = pattern
+    with open(path, "w") as handle:
+        json.dump(data, handle, indent=2)
+        handle.write("\n")
+    print("region_config -> api.5x1.com " + path)
+PY
 
 # 5. Skip SSM pre-OTA cloud backup
 echo "Patching SSM to skip pre-OTA backup..."
