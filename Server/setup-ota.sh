@@ -3,13 +3,13 @@ set -e
 clear
 
 CREDS_FILE="/var/jibo/credentials.json"
-OTA_ENDPOINT="http://joap.5x1.com:80"
+OTA_ENDPOINT="https://api.5x1.com"
 
 echo "=========================================="
 echo "  BEam OTA setup"
 echo "=========================================="
 echo ""
-echo "OTA/loop endpoint: $OTA_ENDPOINT (BEaker)"
+echo "OTA/loop endpoint: $OTA_ENDPOINT (BEefy, updates forwarded to joap)"
 echo "Also patches SSM to skip pre-OTA cloud backup."
 echo "Safe to re-run (idempotent)."
 echo ""
