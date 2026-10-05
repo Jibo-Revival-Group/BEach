@@ -8,7 +8,7 @@ CONFIG_FILE="/usr/local/etc/jibo-jetstream-service.json"
 HUB_HOST="api.5x1.com"
 HUB_PORT="443"
 CREDS_FILE="/var/jibo/credentials.json"
-OTA_ENDPOINT="http://joap.5x1.com:80"
+OTA_ENDPOINT="https://api.5x1.com"
 CA_URL="https://letsencrypt.org/certs/isrgrootx1.pem"
 CA="/opt/jibo/openjibo-ca.crt"
 
