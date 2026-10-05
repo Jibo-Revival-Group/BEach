@@ -4,11 +4,11 @@ clear
 
 CONFIG_FILE="/usr/local/etc/jibo-jetstream-service.json"
 CREDS_FILE="/var/jibo/credentials.json"
-OTA_ENDPOINT="https://api.5x1.com"
+OTA_ENDPOINT="http://joap.5x1.com:80"
 
 echo "--- Jibo BEefy server configurator ---"
 echo "Hub: api.5x1.com (BEefy, port 443 in front of the server)"
-echo "OTA/loop endpoint: $OTA_ENDPOINT (BEefy, updates forwarded to joap)"
+echo "OTA/loop endpoint: $OTA_ENDPOINT (direct to joap)"
 echo "------------------------------------------"
 
 # 1. Remount filesystem
