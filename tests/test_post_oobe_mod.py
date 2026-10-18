@@ -10,6 +10,11 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / "PM/post-oobe-mod.sh"
 
 
+@pytest.fixture(autouse=True, params=("post-oobe-mod.sh", "web-post-oobe-mod.sh"))
+def pm_variant(request, monkeypatch):
+    monkeypatch.setitem(globals(), "SCRIPT", Path(__file__).resolve().parents[1] / "PM" / request.param)
+
+
 def stages():
     source = SCRIPT.read_text()
     blocks = re.findall(r"^python <<'PY'\n(.*?)^PY$", source, re.M | re.S)
