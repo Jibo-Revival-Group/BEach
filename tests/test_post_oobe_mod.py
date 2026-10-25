@@ -43,33 +43,24 @@ def robot(tmp_path):
     return tmp_path, write
 
 
-def provisioner(calls, blocked=False, malformed=False):
-    def call(args):
-        request = Path(args[args.index("--data-binary") + 1][1:])
-        assert request.stat().st_mode & 0o777 == 0o600
-        payload = json.loads(request.read_text())
-        operation = next(a.split(".", 1)[1] for a in args if a.startswith("X-Amz-Target:"))
-        calls.append((operation, payload))
-        if operation == "PrepareRobot":
-            return json.dumps({"token": "fixture-token", "conversionReadiness": {"canWriteRobot": not blocked}}).encode()
-        assert payload["token"] == "fixture-token"
-        return json.dumps({"accessKeyId": "fixture-access", "secretAccessKey": "" if malformed else "fixture-secret"}).encode()
-    return call
+def no_network(args):
+    pytest.fail("Local OOBE preparation must not contact BEefy")
 
 
-def test_missing_oobe_credentials_are_provisioned_without_changing_factory_files(robot, capsys):
+def test_missing_oobe_credentials_are_created_locally_without_changing_factory_files(robot, capsys):
     root, write = robot
     before = {p: p.read_bytes() for p in (root / "var/jibo").rglob("*.json") if p.name != "mode.json"}
-    calls = []
-    stages()["prepare_oobe"](str(root), provisioner(calls))
+    stages()["prepare_oobe"](str(root), no_network)
     creds_path = root / "var/jibo/credentials.json"
     creds = json.loads(creds_path.read_text())
-    assert creds["endpoint"] == "http://joap.5x1.com:80" and creds["secretAccessKey"] == "fixture-secret"
+    assert creds["endpoint"] == "http://joap.5x1.com:80" and len(creds["secretAccessKey"]) == 64
+    assert creds["accessKeyId"].startswith("local-") and creds["region"] == "api"
     assert creds_path.stat().st_mode & 0o777 == 0o600
-    assert [operation for operation, payload in calls] == ["PrepareRobot", "SetupRobot"]
     assert all(p.read_bytes() == raw for p, raw in before.items())
-    assert not list((root / "var/jibo").glob(".pm-oobe-request-*"))
-    assert "fixture-secret" not in capsys.readouterr().out
+    assert not list((root / "var/jibo").glob(".pm-local-credentials-*"))
+    assert creds["secretAccessKey"] not in capsys.readouterr().out
+    stages()["prepare_oobe"](str(root), no_network)
+    assert json.loads(creds_path.read_text()) == creds
 
 
 def test_existing_credentials_are_preserved_without_registration(robot):
@@ -90,22 +81,22 @@ def test_malformed_existing_credentials_are_not_overwritten(robot, value):
     p = write("/var/jibo/credentials.json", value)
     original = p.read_bytes()
     with pytest.raises(RuntimeError, match="incomplete"):
-        stages()["prepare_oobe"](str(root), provisioner([]))
+        stages()["prepare_oobe"](str(root), no_network)
     assert p.read_bytes() == original
 
 
-@pytest.mark.parametrize("blocked,malformed", [(True, False), (False, True)])
-def test_failed_provisioning_leaves_credentials_absent(robot, blocked, malformed):
+def test_missing_factory_calibration_blocks_local_preparation(robot):
     root, write = robot
-    with pytest.raises(RuntimeError):
-        stages()["prepare_oobe"](str(root), provisioner([], blocked, malformed))
+    (root / "var/jibo/lps/CameraModelParamsL.json").unlink()
+    with pytest.raises(FileNotFoundError):
+        stages()["prepare_oobe"](str(root), no_network)
     assert not (root / "var/jibo/credentials.json").exists()
 
 
 def test_completion_receipt_requires_normal_mode_and_preserved_calibration(robot, capsys):
     root, write = robot
     functions = stages()
-    functions["prepare_oobe"](str(root), provisioner([]))
+    functions["prepare_oobe"](str(root), no_network)
     with pytest.raises(RuntimeError, match="normal mode"):
         functions["finish_oobe"](str(root))
     write("/var/jibo/mode.json", {"mode": "normal"})
@@ -120,13 +111,12 @@ def test_completion_receipt_requires_normal_mode_and_preserved_calibration(robot
     assert not receipt.exists()
 
 
-def test_network_errors_do_not_expose_keys(robot):
+def test_local_preparation_does_not_depend_on_network_availability(robot):
     root, write = robot
-    def error(args):
-        raise RuntimeError("fixture-secret")
-    with pytest.raises(RuntimeError) as result:
-        stages()["prepare_oobe"](str(root), error)
-    assert "fixture-secret" not in str(result.value)
+    def offline(args):
+        raise RuntimeError("Network unavailable")
+    stages()["prepare_oobe"](str(root), offline)
+    assert (root / "var/jibo/credentials.json").exists()
 
 
 def test_shell_and_embedded_python_stages_are_valid_and_ordered():
