@@ -18,6 +18,23 @@ echo ""
 
 echo "=== Patch SSM ==="
 python << 'PY'
+import contextlib, os, tempfile
+@contextlib.contextmanager
+def atomic(path):
+    # Temp file + fsync + rename: a failed write never leaves a truncated original.
+    st = os.stat(path)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or '.')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            yield f
+            f.flush()
+            os.fsync(f.fileno())
+        os.chown(tmp, st.st_uid, st.st_gid)
+        os.chmod(tmp, st.st_mode & 0o7777)
+        os.rename(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
 import os, sys
 
 # Live SSM is under /usr/local/bin/jibo-ssm (see service args), not Skills.
@@ -60,7 +77,7 @@ for root in roots:
                 continue
             text = text.replace(needle, replacement)
             try:
-                with open(path, 'w') as f:
+                with atomic(path) as f:
                     f.write(text)
             except Exception as e:
                 sys.stderr.write('WARNING: could not write ' + path + ': ' + str(e) + '\n')
