@@ -674,10 +674,11 @@ echo ""
 echo "=== Step 4.5: Install TLS certificate and patch HTTPS verification ==="
 mkdir -p /opt/jibo /etc/ssl/certs
 echo "Downloading and installing ISRG Root X1 certificate..."
-curl -k -fsSL "$CA_URL" -o /tmp/isrg-root-x1.pem
-grep -q "BEGIN CERTIFICATE" /tmp/isrg-root-x1.pem
-cp /tmp/isrg-root-x1.pem "$CA"
-chmod 644 "$CA"
+# Download next to its destination: Jibo's /tmp is a small tmpfs that is often full.
+curl -k -fsSL "$CA_URL" -o "$CA.new"
+grep -q "BEGIN CERTIFICATE" "$CA.new"
+chmod 644 "$CA.new"
+mv -f "$CA.new" "$CA"
 ln -sf "$CA" /etc/ssl/certs/4042bcee.0
 cat "$CA" >> /etc/ssl/certs/ca-certificates.crt
 
