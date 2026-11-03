@@ -76,6 +76,23 @@ done
 # 3. Update Jetstream Service Configuration
 echo "Updating $CONFIG_FILE to point to $HUB_HOST:$HUB_PORT..."
 python -c "
+import contextlib, os, tempfile
+@contextlib.contextmanager
+def atomic(path):
+    # Temp file + fsync + rename: a failed write never leaves a truncated original.
+    st = os.stat(path)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or '.')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            yield f
+            f.flush()
+            os.fsync(f.fileno())
+        os.chown(tmp, st.st_uid, st.st_gid)
+        os.chmod(tmp, st.st_mode & 0o7777)
+        os.rename(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
 import json
 import sys
 
@@ -95,7 +112,7 @@ try:
         'entrypoint_hostname': host
     }
 
-    with open('$CONFIG_FILE', 'w') as f:
+    with atomic('$CONFIG_FILE') as f:
         json.dump(data, f, indent=4)
     print('Jetstream config updated successfully.')
 except Exception as e:
@@ -111,6 +128,23 @@ if [ ! -f "$CREDS_FILE" ]; then
     echo "WARNING: $CREDS_FILE missing — skipping OTA endpoint adjustment."
 else
     python -c "
+import contextlib, os, tempfile
+@contextlib.contextmanager
+def atomic(path):
+    # Temp file + fsync + rename: a failed write never leaves a truncated original.
+    st = os.stat(path)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or '.')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            yield f
+            f.flush()
+            os.fsync(f.fileno())
+        os.chown(tmp, st.st_uid, st.st_gid)
+        os.chmod(tmp, st.st_mode & 0o7777)
+        os.rename(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
 import json, sys
 
 path = '$CREDS_FILE'
@@ -130,7 +164,7 @@ next_creds = {
     'accessKeyId': data['accessKeyId']
 }
 
-with open(path, 'w') as f:
+with atomic(path) as f:
     json.dump(next_creds, f)
     f.write('\n')
 print('endpoint -> ' + endpoint)
@@ -165,6 +199,23 @@ PY
 # 5. Skip SSM pre-OTA cloud backup
 echo "Patching SSM to skip pre-OTA backup..."
 python << 'PY'
+import contextlib, os, tempfile
+@contextlib.contextmanager
+def atomic(path):
+    # Temp file + fsync + rename: a failed write never leaves a truncated original.
+    st = os.stat(path)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or '.')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            yield f
+            f.flush()
+            os.fsync(f.fileno())
+        os.chown(tmp, st.st_uid, st.st_gid)
+        os.chmod(tmp, st.st_mode & 0o7777)
+        os.rename(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
 import os, sys
 
 roots = [
@@ -206,7 +257,7 @@ for root in roots:
                 continue
             text = text.replace(needle, replacement)
             try:
-                with open(path, 'w') as f:
+                with atomic(path) as f:
                     f.write(text)
             except Exception as e:
                 sys.stderr.write('WARNING: could not write ' + path + ': ' + str(e) + '\n')
