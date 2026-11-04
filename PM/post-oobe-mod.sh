@@ -20,7 +20,8 @@ echo ""
 
 # ---------------------------------------------------------------------------
 echo "=== Step 1: Remount filesystem read-write ==="
-jibo-mount --rw
+# OOBE images have no jibo-mount.
+mount -o remount,rw /
 echo "Done."
 echo ""
 

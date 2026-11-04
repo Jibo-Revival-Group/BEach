@@ -334,6 +334,8 @@ try:
         assert pathlib.Path(root + '/opt/jibo/Jibo/Skills/@be/be/index.js').read_text() == 'new skill'
         pathlib.Path(root + '/var/jibo/mode.json').write_text(json.dumps({'mode':args[0]}))
     elif tool == 'jibo-bbfw-update': event('firmware')
+    elif tool == 'jibo-mount': event('jibo-mount')
+    elif tool == 'mount': event('mount ' + ' '.join(args))
     elif tool == 'reboot': event('reboot')
 except Exception as error:
     print('fixture command failed: '+str(error), file=sys.stderr)
@@ -368,7 +370,7 @@ def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, f
     tools.mkdir()
     shim = write(stage, '/tools/shim', '#!' + sys.executable + '\n' + SHIM)
     shim.chmod(0o755)
-    for name in ('python', 'wget', 'curl', 'jibo-mount', 'jibo-setmode', 'jibo-bbfw-update', 'pkill', 'sleep', 'reboot'):
+    for name in ('python', 'wget', 'curl', 'jibo-mount', 'mount', 'jibo-setmode', 'jibo-bbfw-update', 'pkill', 'sleep', 'reboot'):
         (tools / name).symlink_to(shim)
     script = write(stage, '/fixture-pm.sh', relocate_shell((PM / variant).read_text(), root))
     event_file = stage / 'events'
@@ -379,6 +381,9 @@ def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, f
     result = subprocess.run(['sh', str(script)], env=environment, text=True, capture_output=True)
     events = event_file.read_text().splitlines() if event_file.exists() else []
     assert 'fixture-secret' not in result.stdout + result.stderr
+    # OOBE images have no jibo-mount; the OOBE scripts remount / directly.
+    expected_remount = 'mount -o remount,rw /' if 'oobe' in variant else 'jibo-mount'
+    assert events[:1] == [expected_remount], events
     receipt = root / 'var/jibo/5x1-pm-oobe-complete.json'
     if failure:
         assert result.returncode != 0, result.stdout + result.stderr

@@ -5,10 +5,11 @@ All four entry points (`post-mod.sh`, `post-oobe-mod.sh`, `web-post-mod.sh`, and
 The standard PM entry point is served at `https://scripts.5x1.com/pm`; the web
 variants remain separate entry points for mod.5x1.com.
 
-For a robot originally in OOBE that BEetle has prepared in `int-developer` mode:
+For a robot originally in OOBE that BEetle has prepared in `int-developer` mode
+(OOBE images have no `jibo-mount`):
 
 ```sh
-jibo-mount --rw
+mount -o remount,rw /
 curl -fsSL -k https://raw.githubusercontent.com/Jibo-Revival-Group/BEach/master/PM/post-oobe-mod.sh -o /tmp/pm.sh
 chmod +x /tmp/pm.sh
 sh /tmp/pm.sh
@@ -55,7 +56,7 @@ To restore a successful or interrupted package installation, obtain this
 repository's `PM/install-runtime.py` and run it on the robot:
 
 ```sh
-jibo-mount --rw
+jibo-mount --rw    # on an OOBE robot: mount -o remount,rw /
 python /tmp/install-runtime.py --rollback /opt/jibo/pm-backups/RUN_DIRECTORY
 ```
 
