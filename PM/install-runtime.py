@@ -21,7 +21,11 @@ class _CtypesInflate(object):
 
     zipfile only needs raw-deflate decompression; this drives the system libz with ctypes.
     """
-    def __init__(self, wbits):
+    _lib = _stream_type = None
+
+    @classmethod
+    def _load(cls):
+        # Once per run: find_library starts a subprocess, far too slow per archive member.
         import ctypes
         import ctypes.util
 
@@ -31,12 +35,18 @@ class _CtypesInflate(object):
                         ('msg', ctypes.c_char_p), ('state', ctypes.c_void_p), ('zalloc', ctypes.c_void_p),
                         ('zfree', ctypes.c_void_p), ('opaque', ctypes.c_void_p), ('data_type', ctypes.c_int),
                         ('adler', ctypes.c_ulong), ('reserved', ctypes.c_ulong)]
+        lib = ctypes.CDLL(ctypes.util.find_library('z') or 'libz.so.1')
+        lib.zlibVersion.restype = ctypes.c_char_p
+        cls._lib, cls._stream_type, cls._version = lib, ZStream, lib.zlibVersion()
+
+    def __init__(self, wbits):
+        import ctypes
+        if _CtypesInflate._lib is None:
+            _CtypesInflate._load()
         self._ctypes = ctypes
-        self._lib = ctypes.CDLL(ctypes.util.find_library('z') or 'libz.so.1')
-        self._lib.zlibVersion.restype = ctypes.c_char_p
-        self._stream = ZStream()
-        if self._lib.inflateInit2_(ctypes.byref(self._stream), wbits, self._lib.zlibVersion(),
-                                   ctypes.sizeof(ZStream)) != 0:
+        self._stream = self._stream_type()
+        if self._lib.inflateInit2_(ctypes.byref(self._stream), wbits, self._version,
+                                   ctypes.sizeof(self._stream_type)) != 0:
             raise RuntimeError('libz inflateInit2 failed')
         self.unconsumed_tail = b''
         self.eof = False
