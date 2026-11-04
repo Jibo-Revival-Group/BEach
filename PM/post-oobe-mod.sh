@@ -20,8 +20,9 @@ echo ""
 
 # ---------------------------------------------------------------------------
 echo "=== Step 1: Remount filesystem read-write ==="
-# OOBE images have no jibo-mount.
+# OOBE images have no jibo-mount; remount what it would (/usr/local is read-only on the 13.0.0 os).
 mount -o remount,rw /
+mount -o remount,rw /usr/local
 echo "Done."
 echo ""
 

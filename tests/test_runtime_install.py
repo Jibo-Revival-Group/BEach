@@ -399,8 +399,8 @@ def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, f
     result, events = run_pm(fixture, variant, failure)
     assert 'fixture-secret' not in result.stdout + result.stderr
     # OOBE images have no jibo-mount; the OOBE scripts remount / directly.
-    expected_remount = 'mount -o remount,rw /' if 'oobe' in variant else 'jibo-mount'
-    assert events[:1] == [expected_remount], events
+    expected_remount = ['mount -o remount,rw /', 'mount -o remount,rw /usr/local'] if 'oobe' in variant else ['jibo-mount']
+    assert events[:len(expected_remount)] == expected_remount, events
     receipt = root / 'var/jibo/5x1-pm-oobe-complete.json'
     if failure:
         assert result.returncode != 0, result.stdout + result.stderr
@@ -480,8 +480,8 @@ def test_oobe_pm_updates_an_old_os_first_and_stops_before_beam_and_bench(fixture
     root = fixture[0]
     result, events = run_pm(fixture, variant, FIXTURE_OS='1.9.1')
     assert result.returncode == 0, result.stdout + result.stderr
-    assert events[:2] == ['mount -o remount,rw /', 'prepare'], events
-    assert events[2:] == ['os-offer 1.9.1 oobe', 'os-download',
+    assert events[:3] == ['mount -o remount,rw /', 'mount -o remount,rw /usr/local', 'prepare'], events
+    assert events[3:] == ['os-offer 1.9.1 oobe', 'os-download',
                           'apply-os --source %s/opt/ota/13.0.0-os.tar --subsystem os --from 1.9.1 --to 13.0.0 '
                           '--destination / --filter oobe' % root], events
     assert (root / 'opt/ota/13.0.0-os.tar').read_bytes() == b'os'
