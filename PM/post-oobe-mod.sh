@@ -151,8 +151,11 @@ fi
 PM_STAGE=$(mktemp -d /opt/tmp/pm-install-XXXXXX)
 export PM_STAGE
 trap 'rm -rf "$PM_STAGE"' EXIT
-wget -q https://github.com/Jibo-Revival-Group/BEam/archive/refs/heads/master.zip -O "$PM_STAGE/beam.zip"
-wget -q https://github.com/Jibo-Revival-Group/BEnch/archive/refs/heads/master.zip -O "$PM_STAGE/bench.zip"
+# About 900 MB in total: show progress so a slow download does not look frozen.
+echo "Downloading BEam (about 530 MB)..."
+wget https://github.com/Jibo-Revival-Group/BEam/archive/refs/heads/master.zip -O "$PM_STAGE/beam.zip"
+echo "Downloading BEnch (about 360 MB)..."
+wget https://github.com/Jibo-Revival-Group/BEnch/archive/refs/heads/master.zip -O "$PM_STAGE/bench.zip"
 python <<'PM_INSTALL'
 """Portable Python 2.7/3 PM installer; embedded verbatim in all four scripts."""
 from __future__ import print_function
