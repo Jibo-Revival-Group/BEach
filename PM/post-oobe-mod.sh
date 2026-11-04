@@ -683,12 +683,15 @@ def install(beam_archive, bench_archive, stage, root='', stopper=stop_services,
         os.chmod(hook, 0o755)
         mkdir(backup)
         atomic_json(backup + '/manifest.json', manifest)
+        print('Stopping Jibo services and installing (journaled; do not interrupt)...')
         frozen = stopper(root) or []
         release_overlays(root, overlays, unmount)
         migrate_user_data(root)
         manifest['status'] = 'installing'
         atomic_json(backup + '/manifest.json', manifest)
-        for entry in entries:
+        for count, entry in enumerate(entries, 1):
+            if count % 2000 == 0 or count == len(entries):
+                print('Installing: {} of {} files'.format(count, len(entries)))
             target = checked_target(root, entry['destination'])
             existed = os.path.lexists(target)
             manifest['files'].append({'path': entry['destination'], 'existed': existed})
@@ -703,6 +706,7 @@ def install(beam_archive, bench_archive, stage, root='', stopper=stop_services,
         if bootstrap is None:
             if root:
                 raise RuntimeError('Fixture installation requires a mock bootstrap')
+            print('Preparing runtime storage and the Knowledge Base...')
             subprocess.check_call(['/usr/local/bin/jibo-runtime-bootstrap', '--knowledge'])
         else:
             bootstrap(root)
