@@ -419,3 +419,26 @@ def test_unknown_mounted_service_files_are_not_replaced(fixture):
     with pytest.raises(RuntimeError, match='unknown mounted file'):
         install_fixture(fixture, stopper=lambda root: pytest.fail('Must fail before service shutdown'))
     assert (root / destination.lstrip('/')).read_text() == 'old system manager'
+
+
+def test_installer_reads_deflated_archives_when_python_has_no_zlib(tmp_path):
+    """Jibo's OOBE image ships Python without the zlib module; the installer falls back to libz."""
+    import sys
+    archive = tmp_path / 'deflated.zip'
+    payload = (b'BEam ' * 40000) + bytes(range(256)) * 300
+    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as handle:
+        handle.writestr('BEam-master/@be/be/big.bin', payload)
+        handle.writestr('BEam-master/@be/be/empty.txt', b'')
+    program = (
+        "import sys, zipfile\n"
+        "zipfile.zlib = None\n"
+        "sys.modules['zlib'] = None\n"
+        "namespace = {'__name__': 'fixture'}\n"
+        "exec(compile(open(sys.argv[1]).read(), 'install-runtime', 'exec'), namespace)\n"
+        "with zipfile.ZipFile(sys.argv[2]) as handle:\n"
+        "    sys.stdout.write('%d %d' % (len(handle.read('BEam-master/@be/be/big.bin')),\n"
+        "                                len(handle.read('BEam-master/@be/be/empty.txt'))))\n")
+    result = subprocess.run([sys.executable, '-c', program, str(PM / 'install-runtime.py'), str(archive)],
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == '%d 0' % len(payload)

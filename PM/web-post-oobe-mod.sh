@@ -175,6 +175,75 @@ import time
 import uuid
 import zipfile
 
+
+class _CtypesInflate(object):
+    """zlib.decompressobj(-15) for Pythons built without zlib (Jibo's OOBE image).
+
+    zipfile only needs raw-deflate decompression; this drives the system libz with ctypes.
+    """
+    def __init__(self, wbits):
+        import ctypes
+        import ctypes.util
+
+        class ZStream(ctypes.Structure):
+            _fields_ = [('next_in', ctypes.c_void_p), ('avail_in', ctypes.c_uint), ('total_in', ctypes.c_ulong),
+                        ('next_out', ctypes.c_void_p), ('avail_out', ctypes.c_uint), ('total_out', ctypes.c_ulong),
+                        ('msg', ctypes.c_char_p), ('state', ctypes.c_void_p), ('zalloc', ctypes.c_void_p),
+                        ('zfree', ctypes.c_void_p), ('opaque', ctypes.c_void_p), ('data_type', ctypes.c_int),
+                        ('adler', ctypes.c_ulong), ('reserved', ctypes.c_ulong)]
+        self._ctypes = ctypes
+        self._lib = ctypes.CDLL(ctypes.util.find_library('z') or 'libz.so.1')
+        self._lib.zlibVersion.restype = ctypes.c_char_p
+        self._stream = ZStream()
+        if self._lib.inflateInit2_(ctypes.byref(self._stream), wbits, self._lib.zlibVersion(),
+                                   ctypes.sizeof(ZStream)) != 0:
+            raise RuntimeError('libz inflateInit2 failed')
+        self.unconsumed_tail = b''
+        self.eof = False
+
+    def _inflate(self, data, limit):
+        ctypes = self._ctypes
+        source = ctypes.create_string_buffer(data, len(data))
+        self._stream.next_in = ctypes.addressof(source)
+        self._stream.avail_in = len(data)
+        output = []
+        produced = 0
+        while not self.eof and (not limit or produced < limit):
+            size = min(65536, limit - produced) if limit else 65536
+            target = ctypes.create_string_buffer(size)
+            self._stream.next_out = ctypes.addressof(target)
+            self._stream.avail_out = size
+            result = self._lib.inflate(ctypes.byref(self._stream), 0)
+            if result not in (0, 1, -5):  # Z_OK, Z_STREAM_END, Z_BUF_ERROR (no progress possible)
+                raise RuntimeError('libz inflate failed (%d)' % result)
+            got = size - self._stream.avail_out
+            output.append(target.raw[:got])
+            produced += got
+            self.eof = result == 1
+            if got < size or result == -5:
+                break  # input used up and nothing more buffered
+        left = self._stream.avail_in
+        self.unconsumed_tail = data[len(data) - left:] if left else b''
+        return b''.join(output)
+
+    def decompress(self, data, max_length=0):
+        return self._inflate(data, max_length)
+
+    def flush(self, length=0):
+        return self._inflate(self.unconsumed_tail, 0)
+
+    def __del__(self):
+        try:
+            self._lib.inflateEnd(self._ctypes.byref(self._stream))
+        except Exception:
+            pass
+
+
+if zipfile.zlib is None:
+    class _CtypesZlib(object):
+        decompressobj = staticmethod(_CtypesInflate)
+    zipfile.zlib = _CtypesZlib()
+
 BEAM_ROOT = '/opt/jibo/Jibo/Skills'
 BENCH_ROOT = '/usr/local'
 BOOT_HOOK = b'''#!/bin/sh
@@ -583,7 +652,9 @@ def install(beam_archive, bench_archive, stage, root='', stopper=stop_services,
     try:
         for filename, items in packages:
             with zipfile.ZipFile(filename) as archive:
-                for entry in items:
+                for count, entry in enumerate(items, 1):
+                    if count % 2000 == 0 or count == len(items):
+                        print('Unpacking {}: {} of {} files'.format(os.path.basename(filename), count, len(items)))
                     target = payload + entry['destination']
                     mkdir(os.path.dirname(target))
                     if entry['link'] is not None:
