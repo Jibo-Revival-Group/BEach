@@ -145,8 +145,10 @@ PY
 
 # ---------------------------------------------------------------------------
 echo "=== Step 1.5: Bring Jibo's base system (os) to 13.0.0 ==="
-# BEam and BEnch need the final os (Node 6); factory OOBE images ship an older one.
+# BEam and BEnch need the final os (Node 6) under stock 13.0.0 services, like every other
+# 5x1 robot; factory OOBE images ship older ones. Jibo's own updater installs both.
 OS_VERSION=$(jibo-version 2>/dev/null | sed -n 's/^Jibo Release Version: Release-\([0-9][0-9.]*\).*/\1/p')
+SERVICES_VERSION=$(jibo-service-version 2>/dev/null | sed -n 's/^Jibo Service Version: Release-\([0-9][0-9.]*\).*/\1/p')
 if [ "$OS_VERSION" = "13.0.0" ]; then
     echo "Already on 13.0.0."
 else
@@ -154,31 +156,35 @@ else
         echo "ERROR: an update is already in progress. Reboot Jibo, let it finish, then run this script again." >&2
         exit 1
     fi
-    echo "This robot's os is ${OS_VERSION:-unknown}; updating it to 13.0.0 first."
-    # The os row on BEaker is only offered to the "oobe" filter, never to robots' own update checks.
-    OFFER=$(jibo-get-update --credentials "$CREDS_FILE" --subsystem os --version "${OS_VERSION:-0.0.0}" --filter oobe)
-    OS_URL=$(echo "$OFFER" | sed -n 's/.*"url" *: *"\([^"]*\)".*/\1/p')
-    OS_SHA=$(echo "$OFFER" | sed -n 's/.*"shaHash" *: *"\([0-9a-f]*\)".*/\1/p')
-    if [ -z "$OS_URL" ] || [ -z "$OS_SHA" ] || ! echo "$OFFER" | grep -q '"toVersion" *: *"13.0.0"'; then
-        echo "ERROR: BEaker did not offer the 13.0.0 os: $OFFER" >&2
-        exit 1
-    fi
+    echo "This robot's os is ${OS_VERSION:-unknown}; updating os and services to stock 13.0.0 first."
     mkdir -p /opt/ota
-    OS_PKG=/opt/ota/13.0.0-os.tar
-    echo "Downloading the 13.0.0 os (about 250 MB)..."
-    wget "$OS_URL" -O "$OS_PKG.part"
-    if [ "$(sha1sum "$OS_PKG.part" | cut -d' ' -f1)" != "$OS_SHA" ]; then
-        rm -f "$OS_PKG.part"
-        echo "ERROR: the os download is damaged (checksum mismatch). Run this script again." >&2
-        exit 1
-    fi
-    mv -f "$OS_PKG.part" "$OS_PKG"
-    echo "Installing the 13.0.0 os with Jibo's own updater. Jibo will reboot on his own,"
-    echo "finish the update on the next boot and reboot again. After that his screen stays"
-    echo "black (his old services can't run on the new os). Then run this script again to"
-    echo "install BEam and BEnch."
-    DISPLAY=:0 XAUTHORITY=/tmp/.Xauthority jibo-apply-update --source "$OS_PKG" --subsystem os \
-        --from "${OS_VERSION:-0.0.0}" --to 13.0.0 --destination / --filter oobe
+    # fetch_stock SUBSYSTEM FROM: download BEaker's stock 13.0.0 package to /opt/ota/13.0.0-SUBSYSTEM.tar.
+    # Those rows are only offered to the "oobe" filter, never to robots' own update checks.
+    fetch_stock() {
+        offer=$(jibo-get-update --credentials "$CREDS_FILE" --subsystem "$1" --version "$2" --filter oobe)
+        url=$(echo "$offer" | sed -n 's/.*"url" *: *"\([^"]*\)".*/\1/p')
+        sha=$(echo "$offer" | sed -n 's/.*"shaHash" *: *"\([0-9a-f]*\)".*/\1/p')
+        if [ -z "$url" ] || [ -z "$sha" ] || ! echo "$offer" | grep -q '"toVersion" *: *"13.0.0"'; then
+            echo "ERROR: BEaker did not offer stock 13.0.0 $1: $offer" >&2
+            return 1
+        fi
+        echo "Downloading stock 13.0.0 $1..."
+        wget "$url" -O "/opt/ota/13.0.0-$1.tar.part"
+        if [ "$(sha1sum "/opt/ota/13.0.0-$1.tar.part" | cut -d' ' -f1)" != "$sha" ]; then
+            rm -f "/opt/ota/13.0.0-$1.tar.part"
+            echo "ERROR: the $1 download is damaged (checksum mismatch). Run this script again." >&2
+            return 1
+        fi
+        mv -f "/opt/ota/13.0.0-$1.tar.part" "/opt/ota/13.0.0-$1.tar"
+    }
+    fetch_stock os "${OS_VERSION:-0.0.0}" || exit 1
+    fetch_stock services "${SERVICES_VERSION:-0.0.0}" || exit 1
+    echo "Installing stock 13.0.0 with Jibo's own updater. Jibo will reboot a few times on his own"
+    echo "and show the stock update screens. When he is back on his normal screen,"
+    echo "run this script again to install BEam and BEnch."
+    DISPLAY=:0 XAUTHORITY=/tmp/.Xauthority jibo-apply-update \
+        --source /opt/ota/13.0.0-os.tar --subsystem os --from "${OS_VERSION:-0.0.0}" --to 13.0.0 --destination / --filter oobe \
+        --source /opt/ota/13.0.0-services.tar --subsystem services --from "${SERVICES_VERSION:-0.0.0}" --to 13.0.0 --destination /usr/local --filter oobe
     exit 0
 fi
 echo ""
