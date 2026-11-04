@@ -17,7 +17,8 @@ sh /opt/tmp/pm.sh
 
 If the robot's base system (os) is older than 13.0.0, which factory OOBE images
 are, the first run only updates the os to stock 13.0.0 from BEaker with Jibo's
-own updater. Jibo reboots twice by himself. Then run the same commands again to
+own updater. Jibo reboots twice by himself, then his screen stays black because
+his factory services can't run on the new os. Then run the same commands again to
 install BEam and BEnch.
 
 The OOBE scripts validate factory identity and camera calibration, save their

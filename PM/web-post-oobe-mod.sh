@@ -173,8 +173,9 @@ else
     fi
     mv -f "$OS_PKG.part" "$OS_PKG"
     echo "Installing the 13.0.0 os with Jibo's own updater. Jibo will reboot on his own,"
-    echo "finish the update on the next boot and reboot again. When he is back,"
-    echo "run this script again to install BEam and BEnch."
+    echo "finish the update on the next boot and reboot again. After that his screen stays"
+    echo "black (his old services can't run on the new os). Then run this script again to"
+    echo "install BEam and BEnch."
     DISPLAY=:0 XAUTHORITY=/tmp/.Xauthority jibo-apply-update --source "$OS_PKG" --subsystem os \
         --from "${OS_VERSION:-0.0.0}" --to 13.0.0 --destination / --filter oobe
     exit 0
