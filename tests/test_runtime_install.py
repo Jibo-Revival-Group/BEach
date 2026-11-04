@@ -442,3 +442,14 @@ def test_installer_reads_deflated_archives_when_python_has_no_zlib(tmp_path):
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert result.stdout == '%d 0' % len(payload)
+
+
+def test_corrupt_archive_member_stops_install_before_services_stop(fixture):
+    root, stage, archives, beam, bench = fixture
+    data = bytearray(archives[0].read_bytes())
+    marker = b'new skill'  # stored (uncompressed) payload of @be/be/index.js in the fixture
+    data[data.index(marker)] ^= 0x01
+    archives[0].write_bytes(bytes(data))
+    with pytest.raises(zipfile.BadZipfile):
+        install_fixture(fixture, stopper=lambda root: pytest.fail('Services must not stop for a corrupt archive'))
+    assert (root / 'usr/local/bin/jibo-system-manager').read_text() == 'old system manager'

@@ -172,6 +172,8 @@ def atomic_json(filename, value):
 
 
 def archive_entries(filename, package):
+    # CRCs are checked while staging (zipfile verifies each member it reads), before any service stops.
+    print('Checking {} ({} archive)...'.format(os.path.basename(filename), package))
     result = []
     names = set()
     with zipfile.ZipFile(filename) as archive:
@@ -230,9 +232,6 @@ def archive_entries(filename, package):
                 if parent in names:
                     raise RuntimeError('Archive member has a file as parent: ' + entry['name'])
                 parent = posixpath.dirname(parent)
-        bad = archive.testzip()
-        if bad:
-            raise RuntimeError('Archive CRC failure: ' + bad)
     return result
 
 
