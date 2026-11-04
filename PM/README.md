@@ -10,10 +10,15 @@ For a robot originally in OOBE that BEetle has prepared in `int-developer` mode
 
 ```sh
 mount -o remount,rw /
-curl -fsSL -k https://raw.githubusercontent.com/Jibo-Revival-Group/BEach/master/PM/post-oobe-mod.sh -o /tmp/pm.sh
-chmod +x /tmp/pm.sh
-sh /tmp/pm.sh
+mkdir -p /opt/tmp
+curl -fsSL -k https://raw.githubusercontent.com/Jibo-Revival-Group/BEach/master/PM/post-oobe-mod.sh -o /opt/tmp/pm.sh
+sh /opt/tmp/pm.sh
 ```
+
+If the robot's base system (os) is older than 13.0.0, which factory OOBE images
+are, the first run only updates the os to stock 13.0.0 from BEaker with Jibo's
+own updater. Jibo reboots twice by himself. Then run the same commands again to
+install BEam and BEnch.
 
 The OOBE scripts validate factory identity and camera calibration, save their
 original configuration under `/var/jibo/pm-oobe-before-5x1`, and preserve existing

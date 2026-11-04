@@ -142,6 +142,45 @@ if __name__ == "__main__":
 PY
 
 # ---------------------------------------------------------------------------
+echo "=== Step 1.5: Bring Jibo's base system (os) to 13.0.0 ==="
+# BEam and BEnch need the final os (Node 6); factory OOBE images ship an older one.
+OS_VERSION=$(jibo-version 2>/dev/null | sed -n 's/^Jibo Release Version: Release-\([0-9][0-9.]*\).*/\1/p')
+if [ "$OS_VERSION" = "13.0.0" ]; then
+    echo "Already on 13.0.0."
+else
+    if [ -f /var/jibo/ota.json ]; then
+        echo "ERROR: an update is already in progress. Reboot Jibo, let it finish, then run this script again." >&2
+        exit 1
+    fi
+    echo "This robot's os is ${OS_VERSION:-unknown}; updating it to 13.0.0 first."
+    # The os row on BEaker is only offered to the "oobe" filter, never to robots' own update checks.
+    OFFER=$(jibo-get-update --credentials "$CREDS_FILE" --subsystem os --version "${OS_VERSION:-0.0.0}" --filter oobe)
+    OS_URL=$(echo "$OFFER" | sed -n 's/.*"url" *: *"\([^"]*\)".*/\1/p')
+    OS_SHA=$(echo "$OFFER" | sed -n 's/.*"shaHash" *: *"\([0-9a-f]*\)".*/\1/p')
+    if [ -z "$OS_URL" ] || [ -z "$OS_SHA" ] || ! echo "$OFFER" | grep -q '"toVersion" *: *"13.0.0"'; then
+        echo "ERROR: BEaker did not offer the 13.0.0 os: $OFFER" >&2
+        exit 1
+    fi
+    mkdir -p /opt/ota
+    OS_PKG=/opt/ota/13.0.0-os.tar
+    echo "Downloading the 13.0.0 os (about 250 MB)..."
+    wget "$OS_URL" -O "$OS_PKG.part"
+    if [ "$(sha1sum "$OS_PKG.part" | cut -d' ' -f1)" != "$OS_SHA" ]; then
+        rm -f "$OS_PKG.part"
+        echo "ERROR: the os download is damaged (checksum mismatch). Run this script again." >&2
+        exit 1
+    fi
+    mv -f "$OS_PKG.part" "$OS_PKG"
+    echo "Installing the 13.0.0 os with Jibo's own updater. Jibo will reboot on his own,"
+    echo "finish the update on the next boot and reboot again. When he is back,"
+    echo "run this script again to install BEam and BEnch."
+    DISPLAY=:0 XAUTHORITY=/tmp/.Xauthority jibo-apply-update --source "$OS_PKG" --subsystem os \
+        --from "${OS_VERSION:-0.0.0}" --to 13.0.0 --destination / --filter oobe
+    exit 0
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
 echo "=== Step 2: Stage and install BEam and BEnch ==="
 # Keep downloads outside the Skills tree and preserve all legacy user data.
 if [ ! -d /opt/tmp ]; then

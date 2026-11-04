@@ -299,7 +299,10 @@ def local_bootstrap(value):
         target.write_text(json.dumps({'accessKeyId':'fixture-local', 'secretAccessKey':'fixture-secret',
                                      'region':'api', 'endpoint':'http://joap.5x1.com:80'}))
 try:
-    if tool == 'wget':
+    if tool == 'wget' and any('stock-os' in a for a in args):
+        event('os-download')
+        pathlib.Path(args[args.index('-O') + 1]).write_bytes(os.environ.get('OS_BYTES', 'os').encode())
+    elif tool == 'wget':
         event('download')
         if os.environ.get('FAIL_AT') == 'download': raise RuntimeError('fixture download failed')
         source = os.environ['BENCH_ARCHIVE' if any('BEnch/archive' in a for a in args) else 'BEAM_ARCHIVE']
@@ -337,6 +340,13 @@ try:
     elif tool == 'jibo-mount': event('jibo-mount')
     elif tool == 'mount': event('mount ' + ' '.join(args))
     elif tool == 'reboot': event('reboot')
+    elif tool == 'jibo-version': print('Jibo Release Version: Release-%s-20190225' % os.environ.get('FIXTURE_OS', '13.0.0'))
+    elif tool == 'jibo-get-update':
+        event('os-offer ' + args[args.index('--version') + 1] + ' ' + args[args.index('--filter') + 1])
+        print(json.dumps({'toVersion': '13.0.0', 'shaHash': '999a3419d9959d3c39b11dcc67d79c7888b4b765',
+                          'url': 'http://joap.5x1.com:80/packages/0ade7c2c/stock-os-13.0.0.tar'}))
+    elif tool == 'jibo-apply-update':
+        event('apply-os ' + ' '.join(args))
 except Exception as error:
     print('fixture command failed: '+str(error), file=sys.stderr)
     sys.exit(1)
@@ -361,25 +371,32 @@ def relocate_shell(source, root):
     return ''.join(output)
 
 
-@pytest.mark.parametrize('variant', VARIANTS)
-@pytest.mark.parametrize('failure', (None, 'download', 'bootstrap'))
-def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, failure):
+def run_pm(fixture, variant, failure=None, **extra_env):
     import sys
     root, stage, archives, _, _ = fixture
     tools = stage / 'tools'
     tools.mkdir()
     shim = write(stage, '/tools/shim', '#!' + sys.executable + '\n' + SHIM)
     shim.chmod(0o755)
-    for name in ('python', 'wget', 'curl', 'jibo-mount', 'mount', 'jibo-setmode', 'jibo-bbfw-update', 'pkill', 'sleep', 'reboot'):
+    for name in ('python', 'wget', 'curl', 'jibo-mount', 'mount', 'jibo-setmode', 'jibo-bbfw-update', 'pkill', 'sleep', 'reboot',
+                 'jibo-version', 'jibo-get-update', 'jibo-apply-update'):
         (tools / name).symlink_to(shim)
     script = write(stage, '/fixture-pm.sh', relocate_shell((PM / variant).read_text(), root))
     event_file = stage / 'events'
     environment = dict(os.environ, PATH=str(tools) + ':' + os.environ['PATH'],
                        FIXTURE_ROOT=str(root), FIXTURE_EVENTS=str(event_file),
                        BEAM_ARCHIVE=str(archives[0]), BENCH_ARCHIVE=str(archives[1]),
-                       FAIL_AT=failure or '')
+                       FAIL_AT=failure or '', **extra_env)
     result = subprocess.run(['sh', str(script)], env=environment, text=True, capture_output=True)
     events = event_file.read_text().splitlines() if event_file.exists() else []
+    return result, events
+
+
+@pytest.mark.parametrize('variant', VARIANTS)
+@pytest.mark.parametrize('failure', (None, 'download', 'bootstrap'))
+def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, failure):
+    root = fixture[0]
+    result, events = run_pm(fixture, variant, failure)
     assert 'fixture-secret' not in result.stdout + result.stderr
     # OOBE images have no jibo-mount; the OOBE scripts remount / directly.
     expected_remount = 'mount -o remount,rw /' if 'oobe' in variant else 'jibo-mount'
@@ -453,3 +470,38 @@ def test_corrupt_archive_member_stops_install_before_services_stop(fixture):
     with pytest.raises(zipfile.BadZipfile):
         install_fixture(fixture, stopper=lambda root: pytest.fail('Services must not stop for a corrupt archive'))
     assert (root / 'usr/local/bin/jibo-system-manager').read_text() == 'old system manager'
+
+
+OOBE_VARIANTS = ('post-oobe-mod.sh', 'web-post-oobe-mod.sh')
+
+
+@pytest.mark.parametrize('variant', OOBE_VARIANTS)
+def test_oobe_pm_updates_an_old_os_first_and_stops_before_beam_and_bench(fixture, variant):
+    root = fixture[0]
+    result, events = run_pm(fixture, variant, FIXTURE_OS='1.9.1')
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert events[:2] == ['mount -o remount,rw /', 'prepare'], events
+    assert events[2:] == ['os-offer 1.9.1 oobe', 'os-download',
+                          'apply-os --source %s/opt/ota/13.0.0-os.tar --subsystem os --from 1.9.1 --to 13.0.0 '
+                          '--destination / --filter oobe' % root], events
+    assert (root / 'opt/ota/13.0.0-os.tar').read_bytes() == b'os'
+    assert (root / 'usr/local/bin/jibo-system-manager').read_text() == 'old system manager'
+    assert 'run this script again' in result.stdout
+
+
+@pytest.mark.parametrize('variant', OOBE_VARIANTS)
+def test_oobe_pm_refuses_a_damaged_os_download(fixture, variant):
+    root = fixture[0]
+    result, events = run_pm(fixture, variant, FIXTURE_OS='1.9.1', OS_BYTES='damaged')
+    assert result.returncode != 0
+    assert not any(e.startswith('apply-os') for e in events), events
+    assert not list((root / 'opt/ota').iterdir())
+
+
+@pytest.mark.parametrize('variant', OOBE_VARIANTS)
+def test_oobe_pm_does_not_start_a_second_os_update(fixture, variant):
+    root = fixture[0]
+    (root / 'var/jibo/ota.json').write_text('{}')
+    result, events = run_pm(fixture, variant, FIXTURE_OS='1.9.1')
+    assert result.returncode != 0
+    assert not any(e.startswith(('os-offer', 'apply-os')) for e in events), events
