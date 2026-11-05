@@ -1072,6 +1072,9 @@ if __name__ == "__main__":
 PY
 
 # ---------------------------------------------------------------------------
+# Skills (uid 2000) need to read and write everything here, including files PM just installed.
+echo "Opening /opt/tmp and /opt/jibo to Jibo's skills..."
+chmod -R 777 /opt/tmp /opt/jibo || echo "Warning: some files under /opt/tmp or /opt/jibo kept their permissions."
 echo "=== Step 10: Reboot ==="
 echo "Mode change requires a reboot. Rebooting now..."
 echo ""

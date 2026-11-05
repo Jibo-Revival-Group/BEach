@@ -420,6 +420,7 @@ def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, f
         assert events.index('stop') < events.index('bootstrap') < events.index('normal') < events.index('reboot')
         assert json.loads((root / 'var/jibo/mode.json').read_text())['mode'] == 'normal'
         assert (root / 'opt/tmp').stat().st_mode & 0o777 == 0o777, 'Be (uid 2000) must be able to use /opt/tmp'
+        assert (root / 'opt/jibo/Jibo/Skills/@be/be/index.js').stat().st_mode & 0o777 == 0o777
         if 'oobe' in variant:
             assert events.index('normal') < events.index('firmware') < events.index('receipt') < events.index('reboot')
             assert receipt.exists()
