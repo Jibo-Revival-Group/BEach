@@ -27,10 +27,9 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "=== Step 2: Stage and install BEam and BEnch ==="
 # Keep downloads outside the Skills tree and preserve all legacy user data.
-if [ ! -d /opt/tmp ]; then
-    mkdir -p /opt/tmp
-    chmod 777 /opt/tmp
-fi
+# Be (uid 2000) needs /opt/tmp; a root shell's own "mkdir -p /opt/tmp" makes it root-only (700).
+mkdir -p /opt/tmp
+chmod 777 /opt/tmp
 PM_STAGE=$(mktemp -d /opt/tmp/pm-install-XXXXXX)
 export PM_STAGE
 trap 'rm -rf "$PM_STAGE"' EXIT

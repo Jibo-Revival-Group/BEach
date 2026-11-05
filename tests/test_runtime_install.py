@@ -401,6 +401,8 @@ def run_pm(fixture, variant, failure=None, **extra_env):
 @pytest.mark.parametrize('failure', (None, 'download', 'bootstrap'))
 def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, failure):
     root = fixture[0]
+    (root / 'opt/tmp').mkdir(mode=0o700, parents=True, exist_ok=True)  # as a user's own mkdir over SSH leaves it
+    (root / 'opt/tmp').chmod(0o700)
     result, events = run_pm(fixture, variant, failure)
     assert 'fixture-secret' not in result.stdout + result.stderr
     # OOBE images have no jibo-mount; the OOBE scripts remount / directly.
@@ -417,6 +419,7 @@ def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, f
         assert events.count('download') == 2
         assert events.index('stop') < events.index('bootstrap') < events.index('normal') < events.index('reboot')
         assert json.loads((root / 'var/jibo/mode.json').read_text())['mode'] == 'normal'
+        assert (root / 'opt/tmp').stat().st_mode & 0o777 == 0o777, 'Be (uid 2000) must be able to use /opt/tmp'
         if 'oobe' in variant:
             assert events.index('normal') < events.index('firmware') < events.index('receipt') < events.index('reboot')
             assert receipt.exists()
