@@ -180,7 +180,7 @@ else
     fetch_stock os "${OS_VERSION:-0.0.0}" || exit 1
     fetch_stock services "${SERVICES_VERSION:-0.0.0}" || exit 1
     echo "Installing stock 13.0.0 with Jibo's own updater. Jibo will reboot a few times on his own"
-    echo "and show the stock update screens. When he is back on his normal screen,"
+    echo "and show the stock update screens. When they are done (his screen stays black),"
     echo "run this script again to install BEam and BEnch."
     DISPLAY=:0 XAUTHORITY=/tmp/.Xauthority jibo-apply-update \
         --source /opt/ota/13.0.0-os.tar --subsystem os --from "${OS_VERSION:-0.0.0}" --to 13.0.0 --destination / --filter oobe \
