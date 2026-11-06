@@ -309,6 +309,10 @@ try:
         if os.environ.get('FAIL_AT') == 'download': raise RuntimeError('fixture download failed')
         source = os.environ['BENCH_ARCHIVE' if any('BEnch/archive' in a for a in args) else 'BEAM_ARCHIVE']
         shutil.copyfile(source, args[args.index('-O') + 1])
+    elif tool == 'curl' and any(a.endswith('post-oobe-mod.sh') for a in args):
+        event('oobe-redirect ' + [a for a in args if a.endswith('.sh')][0].rsplit('/', 1)[1])
+        shutil.copyfile(os.environ['OOBE_SCRIPT_DIR'] + '/' + [a for a in args if a.endswith('.sh')][0].rsplit('/', 1)[1],
+                        args[args.index('-o') + 1])
     elif tool == 'curl':
         event('certificate')
         pathlib.Path(args[args.index('-o') + 1]).write_text('-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n')
@@ -376,7 +380,7 @@ def relocate_shell(source, root):
     return ''.join(output)
 
 
-def run_pm(fixture, variant, failure=None, **extra_env):
+def run_pm(fixture, variant, failure=None, jibo_mount=True, **extra_env):
     import sys
     root, stage, archives, _, _ = fixture
     tools = stage / 'tools'
@@ -385,8 +389,12 @@ def run_pm(fixture, variant, failure=None, **extra_env):
     shim.chmod(0o755)
     for name in ('python', 'wget', 'curl', 'jibo-mount', 'mount', 'jibo-setmode', 'jibo-bbfw-update', 'pkill', 'sleep', 'reboot',
                  'jibo-version', 'jibo-service-version', 'jibo-get-update', 'jibo-apply-update'):
-        (tools / name).symlink_to(shim)
+        if name != 'jibo-mount' or jibo_mount:
+            (tools / name).symlink_to(shim)
     script = write(stage, '/fixture-pm.sh', relocate_shell((PM / variant).read_text(), root))
+    for oobe in ('post-oobe-mod.sh', 'web-post-oobe-mod.sh'):  # what the regular PM's OOBE redirect downloads
+        write(stage, '/oobe-scripts/' + oobe, relocate_shell((PM / oobe).read_text(), root))
+    extra_env.setdefault('OOBE_SCRIPT_DIR', str(stage / 'oobe-scripts'))
     event_file = stage / 'events'
     environment = dict(os.environ, PATH=str(tools) + ':' + os.environ['PATH'],
                        FIXTURE_ROOT=str(root), FIXTURE_EVENTS=str(event_file),
@@ -424,6 +432,24 @@ def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, f
         if 'oobe' in variant:
             assert events.index('normal') < events.index('firmware') < events.index('receipt') < events.index('reboot')
             assert receipt.exists()
+
+
+@pytest.mark.parametrize('variant', ('post-mod.sh', 'web-post-mod.sh'))
+@pytest.mark.parametrize('oobe', ('state-file', 'oobe-mode', 'no-jibo-mount'))
+def test_regular_pm_runs_the_oobe_pm_on_an_oobe_robot(fixture, variant, oobe):
+    root = fixture[0]
+    if oobe == 'state-file':  # an OOBE robot after its os update (normal mode, has jibo-mount), like .115
+        write(root, '/var/jibo/mode.json', '{"mode":"normal"}')
+        write(root, '/var/jibo/5x1-pm-oobe-state.json', json.dumps({'schema': 1, 'robot': 'Fixture-Robot'}))
+    elif oobe == 'oobe-mode':
+        write(root, '/var/jibo/mode.json', '{"mode": "oobe"}')
+    result, events = run_pm(fixture, variant, jibo_mount=oobe != 'no-jibo-mount')
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert events[0] == 'oobe-redirect ' + variant.replace('post-mod', 'post-oobe-mod'), events
+    assert 'jibo-mount' not in events
+    assert events[1:3] == ['mount -o remount,rw /', 'mount -o remount,rw /usr/local'], events
+    assert (root / 'var/jibo/5x1-pm-oobe-complete.json').exists()
+    assert 'running the OOBE PM instead' in result.stdout
 
 
 def test_known_beetle_startup_overlay_is_released_after_services_stop(fixture):
