@@ -1,6 +1,7 @@
 """PM installation on disposable robot trees; never stops host services."""
 import importlib.util
 import json
+import shutil
 import os
 from pathlib import Path
 import stat
@@ -434,7 +435,7 @@ def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, f
 
 
 @pytest.mark.parametrize('variant', ('post-mod.sh', 'web-post-mod.sh'))
-@pytest.mark.parametrize('oobe', ('state-file', 'oobe-mode'))
+@pytest.mark.parametrize('oobe', ('state-file', 'oobe-mode', 'no-be-no-kb', 'no-be-empty-kb'))
 def test_regular_pm_runs_the_oobe_pm_on_an_oobe_robot(fixture, variant, oobe):
     root = fixture[0]
     if oobe == 'state-file':  # an OOBE robot after its os update (normal mode, has jibo-mount), like .115
@@ -442,6 +443,10 @@ def test_regular_pm_runs_the_oobe_pm_on_an_oobe_robot(fixture, variant, oobe):
         write(root, '/var/jibo/5x1-pm-oobe-state.json', json.dumps({'schema': 1, 'robot': 'Fixture-Robot'}))
     elif oobe == 'oobe-mode':
         write(root, '/var/jibo/mode.json', '{"mode": "oobe"}')
+    else:  # int-developer OOBE robot that never had BEam or a Knowledge Base
+        shutil.rmtree(str(root / 'opt/jibo/Jibo/Skills/@be'))
+        if oobe == 'no-be-empty-kb':
+            (root / 'opt/jibo/Knowledge').mkdir(parents=True)
     result, events = run_pm(fixture, variant)
     assert result.returncode == 0, result.stdout + result.stderr
     assert events[0] == 'oobe-redirect ' + variant.replace('post-mod', 'post-oobe-mod'), events
@@ -449,6 +454,16 @@ def test_regular_pm_runs_the_oobe_pm_on_an_oobe_robot(fixture, variant, oobe):
     assert events[1:3] == ['mount -o remount,rw /', 'mount -o remount,rw /usr/local'], events
     assert (root / 'var/jibo/5x1-pm-oobe-complete.json').exists()
     assert 'running the OOBE PM instead' in result.stdout
+
+
+@pytest.mark.parametrize('variant', ('post-mod.sh', 'web-post-mod.sh'))
+def test_regular_pm_stays_regular_on_a_set_up_robot_without_be(fixture, variant):
+    root = fixture[0]
+    shutil.rmtree(str(root / 'opt/jibo/Jibo/Skills/@be'))  # a stock robot's first PM: no @be, but it has a KB
+    write(root, '/opt/jibo/Knowledge/jibo/memo.db', 'kb')
+    result, events = run_pm(fixture, variant)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert events[0] == 'jibo-mount', events
 
 
 def test_known_beetle_startup_overlay_is_released_after_services_stop(fixture):
