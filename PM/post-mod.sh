@@ -12,10 +12,9 @@ OTA_ENDPOINT="http://joap.5x1.com:80"
 CA_URL="https://letsencrypt.org/certs/isrgrootx1.pem"
 CA="/opt/jibo/openjibo-ca.crt"
 
-# An OOBE robot needs the OOBE PM: its state file (an earlier OOBE run), an OOBE mode, or no jibo-mount
-# (OOBE images lack it) means this is one.
-if [ -f /var/jibo/5x1-pm-oobe-state.json ] || grep -qE '"mode" *: *"(oobe|identified)"' /var/jibo/mode.json 2>/dev/null \
-        || ! command -v jibo-mount >/dev/null 2>&1; then
+# An OOBE robot needs the OOBE PM: its state file (an earlier OOBE run) or an OOBE mode means this is one.
+# (Not jibo-mount: installing services/BEnch adds it to OOBE robots too.)
+if [ -f /var/jibo/5x1-pm-oobe-state.json ] || grep -qE '"mode" *: *"(oobe|identified)"' /var/jibo/mode.json 2>/dev/null; then
     echo "This Jibo is running OOBE: running the OOBE PM instead."
     curl -fsSL -k https://raw.githubusercontent.com/Jibo-Revival-Group/BEach/master/PM/post-oobe-mod.sh -o /tmp/5x1-oobe-pm.sh
     exec sh /tmp/5x1-oobe-pm.sh

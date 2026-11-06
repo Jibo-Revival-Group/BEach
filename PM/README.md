@@ -6,7 +6,7 @@ The standard PM entry point is served at `https://scripts.5x1.com/pm`; the web
 variants remain separate entry points for mod.5x1.com.
 
 The regular scripts (`post-mod.sh`, `web-post-mod.sh`) detect an OOBE robot (the
-OOBE PM's state file, an `oobe`/`identified` mode, or no `jibo-mount`) and run the
+OOBE PM's state file or an `oobe`/`identified` mode) and run the
 matching OOBE script instead, so OOBE robots can use the regular commands too.
 
 For a robot originally in OOBE that BEetle has prepared in `int-developer` mode

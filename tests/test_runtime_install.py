@@ -380,7 +380,7 @@ def relocate_shell(source, root):
     return ''.join(output)
 
 
-def run_pm(fixture, variant, failure=None, jibo_mount=True, **extra_env):
+def run_pm(fixture, variant, failure=None, **extra_env):
     import sys
     root, stage, archives, _, _ = fixture
     tools = stage / 'tools'
@@ -389,8 +389,7 @@ def run_pm(fixture, variant, failure=None, jibo_mount=True, **extra_env):
     shim.chmod(0o755)
     for name in ('python', 'wget', 'curl', 'jibo-mount', 'mount', 'jibo-setmode', 'jibo-bbfw-update', 'pkill', 'sleep', 'reboot',
                  'jibo-version', 'jibo-service-version', 'jibo-get-update', 'jibo-apply-update'):
-        if name != 'jibo-mount' or jibo_mount:
-            (tools / name).symlink_to(shim)
+        (tools / name).symlink_to(shim)
     script = write(stage, '/fixture-pm.sh', relocate_shell((PM / variant).read_text(), root))
     for oobe in ('post-oobe-mod.sh', 'web-post-oobe-mod.sh'):  # what the regular PM's OOBE redirect downloads
         write(stage, '/oobe-scripts/' + oobe, relocate_shell((PM / oobe).read_text(), root))
@@ -435,7 +434,7 @@ def test_all_pm_shell_flows_with_mocked_hardware_and_network(fixture, variant, f
 
 
 @pytest.mark.parametrize('variant', ('post-mod.sh', 'web-post-mod.sh'))
-@pytest.mark.parametrize('oobe', ('state-file', 'oobe-mode', 'no-jibo-mount'))
+@pytest.mark.parametrize('oobe', ('state-file', 'oobe-mode'))
 def test_regular_pm_runs_the_oobe_pm_on_an_oobe_robot(fixture, variant, oobe):
     root = fixture[0]
     if oobe == 'state-file':  # an OOBE robot after its os update (normal mode, has jibo-mount), like .115
@@ -443,7 +442,7 @@ def test_regular_pm_runs_the_oobe_pm_on_an_oobe_robot(fixture, variant, oobe):
         write(root, '/var/jibo/5x1-pm-oobe-state.json', json.dumps({'schema': 1, 'robot': 'Fixture-Robot'}))
     elif oobe == 'oobe-mode':
         write(root, '/var/jibo/mode.json', '{"mode": "oobe"}')
-    result, events = run_pm(fixture, variant, jibo_mount=oobe != 'no-jibo-mount')
+    result, events = run_pm(fixture, variant)
     assert result.returncode == 0, result.stdout + result.stderr
     assert events[0] == 'oobe-redirect ' + variant.replace('post-mod', 'post-oobe-mod'), events
     assert 'jibo-mount' not in events
