@@ -879,9 +879,10 @@ echo ""
 echo "Opening /opt/tmp and /opt/jibo to Jibo's skills..."
 chmod -R 777 /opt/tmp /opt/jibo || echo "Warning: some files under /opt/tmp or /opt/jibo kept their permissions."
 echo "=== Step 9: Reboot ==="
-echo "Mode change requires a reboot. Rebooting now..."
+echo "PM is done. Jibo can't restart himself until his next boot, so restart him yourself."
 echo ""
 echo ""
 echo ""
-echo "Wait like 2 minutes while the robot reboots... I'm done here."
-reboot
+echo "Unplug Jibo, wait 10 seconds, and plug him back in. He takes about 2 minutes to start up."
+# Usually does nothing after PM (see the message above); kept in case it works on this robot.
+reboot 2>/dev/null
