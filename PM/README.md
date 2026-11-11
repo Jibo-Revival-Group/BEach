@@ -1,14 +1,15 @@
 # Post-mod scripts
 
 All four entry points (`post-mod.sh`, `post-oobe-mod.sh`, `web-post-mod.sh`, and
-`web-post-oobe-mod.sh`) install **BEam and BEnch** from their `master` archives.
-The standard PM entry point is served at `https://scripts.5x1.com/pm`; the web
-variants remain separate entry points for mod.5x1.com.
+`web-post-oobe-mod.sh`) install 5x1 the same way an update does: they queue one OTA
+from BEaker (`joap.5x1.com`) with Jibo's own updater. The standard PM entry point is
+served at `https://scripts.5x1.com/pm`; the web variants remain separate entry points
+for mod.5x1.com.
 
 The regular scripts (`post-mod.sh`, `web-post-mod.sh`) detect an OOBE robot (the
 OOBE PM's state file, an `oobe`/`identified` mode, or no `@be` skill and an empty or
-missing `/opt/jibo/Knowledge`) and run the
-matching OOBE script instead, so OOBE robots can use the regular commands too.
+missing `/opt/jibo/Knowledge`) and run the matching OOBE script instead, so OOBE
+robots can use the regular commands too.
 
 For a robot originally in OOBE that BEetle has prepared in `int-developer` mode
 (OOBE images have no `jibo-mount`):
@@ -20,80 +21,40 @@ curl -fsSL -k https://raw.githubusercontent.com/Jibo-Revival-Group/BEach/master/
 sh /opt/tmp/pm.sh
 ```
 
-If the robot's base system (os) is older than 13.0.0, which factory OOBE images
-are, the first run only updates the os and services to stock 13.0.0 from BEaker
-with Jibo's own updater. Jibo reboots a few times by himself. When the update
-screens are done (his screen stays black), run the same commands again to install
-BEam and BEnch.
+## What PM does
 
-The OOBE scripts validate factory identity and camera calibration, save their
-original configuration under `/var/jibo/pm-oobe-before-5x1`, and preserve existing
-credential keys. Absent credentials get random local values; no PrepareRobot or
-SetupRobot request is needed. Invalid existing credentials stop preparation.
-Local credentials support robot startup; cloud account pairing/acceptance is a
-separate concern.
+1. Remounts read-write.
+2. Regular: points `/var/jibo/credentials.json` at `http://joap.5x1.com:80` (keys kept).
+   OOBE: validates factory identity and camera calibration, saves the original
+   configuration under `/var/jibo/pm-oobe-before-5x1`, keeps existing credential keys
+   (absent ones get random local values; invalid ones stop PM) and points them at joap.
+   No PrepareRobot or SetupRobot request is needed.
+3. Sets normal mode. OOBE also flashes BBFW, re-checks the factory files and writes
+   `/var/jibo/5x1-pm-oobe-complete.json` / prints `5X1_OOBE_PM_COMPLETE` (no secrets).
+4. Asks BEaker for the newest os, services, `@be/be`, `jibo-tbd`, `oobe-config`,
+   `jibo-diagnostics` and `fin-goods-test` (as version 0.0.0, filter `fcs`, so the newest
+   full package is always offered), checks there is room on `/opt` (all packages plus
+   the largest again), sets aside an unfinished update (`/var/jibo/ota.json.old`),
+   downloads each to `/opt/ota/pm-<name>.tar` (SHA-1 checked, 5 tries; a finished
+   download is reused on a rerun), and queues them all in one `jibo-apply-update`.
 
-Both archives are validated and staged before services stop. PM checks space
-for staging, filesystem allocation, migration, deployment, and recovery backups.
-BEam goes into `/opt/jibo/Jibo/Skills`, and BEnch's `usr/local` payload goes into
-`/usr/local`. Repository metadata, tests, and obsolete backup artifacts are
-excluded. Executable permissions and relative symlinks are retained; native
-binaries, including `jibo-service-version`, are not patched.
+Jibo then installs the modded os (BEnch's root filesystem, os 13.0.7, the same version as services: no firewall,
+Let's Encrypt root, api.5x1.com, the runtime bootstrap boot hook), BEnch's services
+and BEam's skills, rebooting between them with the stock update screens. This works
+the same from a factory OOBE os (3.x): the new os's updater finishes the queue. PM no
+longer edits the root filesystem by hand, so a later os update keeps the mods.
 
-The installer freezes Jibo's supervisors and stops their services before file
-replacement. BEetle's recognized startup-view bind overlay is released so the
-underlying BEnch file can be backed up and updated; unknown mounted files stop
-preflight. Files on the same filesystem move into place; replacements are
-journaled and original files remain in `/opt/jibo/pm-backups/<run>/`. Legacy music
-and BEacon data are merged into Knowledge without overwriting current content
-or clearing `/opt/tmp`. Installation failures restore the replaced files and
-resume the supervisors. A hard interruption leaves a journal for recovery.
+Any failure before the last step (no offer, too little space, a bad download) exits
+before the update is queued; nothing is installed.
 
-PM installs `/etc/init.d/S04jibo-bootstrap`, runs local runtime/KB initialization,
-then applies the existing TLS, hub, region, OTA and SSM compatibility patches.
-Managed service starts/restarts use `jibo-service-start` to prepare their local
-storage. Only PM changes the robot's mode. A failed installation or initialization
-prevents normal-mode selection and reboot. Later configuration failures also
-prevent successful completion and reboot; the installation backup is retained.
+The OTA block is the same in all four scripts (between `# >>> 5x1 OTA install` and
+`# <<< 5x1 OTA install`); the tests enforce that.
 
-Before reboot, OOBE PM verifies factory hashes, credentials, normal mode and hub
-configuration. It writes `/var/jibo/5x1-pm-oobe-complete.json` and prints
-`5X1_OOBE_PM_COMPLETE` so BEetle can distinguish completion from an interrupted
-run. Receipts contain no credential secrets.
-
-## Recovery and maintenance
-
-To restore a successful or interrupted package installation, obtain this
-repository's `PM/install-runtime.py` and run it on the robot:
-
-```sh
-jibo-mount --rw    # on an OOBE robot: mount -o remount,rw /
-python /tmp/install-runtime.py --rollback /opt/jibo/pm-backups/RUN_DIRECTORY
-```
-
-Recovery verifies factory identity/calibration hashes, stops services, restores
-journaled files, and resumes the supervisors. It consumes saved files as they
-are restored. Recovery reads the manifest and journal under the installer lock,
-so a completed rollback is not replayed against a later installation. For a
-completed installation, the journal must match the manifest's full file list;
-missing, truncated, or inconsistent journals stop recovery before services or
-installed files are touched. Keep the backup intact and investigate the damaged
-journal rather than treating the run as restored. Interrupted installations still
-use complete journal lines, ignoring an unfinished final intent.
-
-User data under Knowledge and OOBE configuration backups remain.
-After a hard interruption/recovery, rerun PM to finish configuration before
-rebooting. Keep backups until the installation has been validated on hardware.
-
-`install-runtime.py` is the canonical installer source, embedded verbatim in all
-four scripts so a downloaded PM remains self-contained. When changing it, update
-all four `PM_INSTALL` blocks; the tests enforce equality.
-
-Run fixture tests without BEefy access, firmware flashing, or a real reboot:
+Run fixture tests without BEaker access, firmware flashing, or a real reboot:
 
 ```sh
 python3 -m pytest -q tests
 ```
 
-Live OOBE installation, native services, BBFW/reboot behavior, and cloud acceptance
-of locally generated credentials still require hardware validation.
+Live OOBE installation, BBFW/reboot behavior, and cloud acceptance of locally
+generated credentials still require hardware validation.

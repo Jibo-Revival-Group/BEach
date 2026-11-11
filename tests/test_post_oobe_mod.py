@@ -124,7 +124,6 @@ def test_shell_and_embedded_python_stages_are_valid_and_ordered():
     text = SCRIPT.read_text()
     for delimiter, block in re.findall(r"^python << ?'([A-Z]+)'\n(.*?)^\1$", text, re.M | re.S):
         compile(block, str(SCRIPT), "exec")
-    assert text.index("prepare_oobe()") < text.index('rm -f /etc/init.d/S21firewall')
-    assert text.index("jibo-setmode normal") < text.index("jibo-bbfw-update") < text.index("finish_oobe()")
-    assert text.index('print("5X1_OOBE_PM_COMPLETE")') < text.rindex("\nreboot")
+    assert text.index("prepare_oobe()") < text.index("jibo-setmode normal") < text.index("jibo-bbfw-update") \
+        < text.index("finish_oobe()") < text.index("jibo-apply-update")
     assert 'if [ -t 1 ]; then clear || true; fi' in text

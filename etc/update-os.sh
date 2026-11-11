@@ -5,8 +5,8 @@
 # It asks BEaker as if the robot were on 0.0.0, so the newest os is always offered (stock os rows
 # are filter "oobe"; any normal os release would be "fcs"), checks the SHA-1, and installs it with
 # Jibo's own updater, which reboots a few times by itself.
-# An os install reformats the root partition: edits made there by PM (CA certificates, region
-# config, boot hooks) are replaced by the package's own files.
+# An os install reformats the root partition: anything edited there by hand is replaced by the
+# package's own files (5x1's os, from 13.0.7, already has PM's changes).
 
 CREDS="${CREDS:-/var/jibo/credentials.json}"
 OTA_DIR="${OTA_DIR:-/opt/ota}"
