@@ -81,9 +81,11 @@ jibo-setmode normal
 echo "Done."
 echo ""
 
-# Be (uid 2000) needs /opt/tmp; a root shell's own "mkdir -p /opt/tmp" makes it root-only (700).
+# Be (uid 2000) needs /opt/tmp and everything in /opt/jibo; root-owned leftovers there (a root shell's
+# "mkdir -p", files from other servers' scripts) stop him on a black screen with EACCES.
 mkdir -p /opt/tmp
 chmod 777 /opt/tmp
+chmod -R 777 /opt/jibo/ || echo "Warning: could not open up every file in /opt/jibo"
 
 # The WebUSB site installs only this one-time launcher, never PM itself.
 # SSH/manual PM retains its existing behavior when this flag is absent.

@@ -126,6 +126,7 @@ def robot(tmp_path):
                                                            'region': 'api', 'endpoint': 'https://api.jibo.com'}))
     write(root, '/opt/jibo/Jibo/Skills/@be/be/package.json', '{\n  "name": "@be/be",\n  "version": "13.0.10"\n}\n')
     write(root, '/opt/jibo/Knowledge/jibo/memo.db', 'kb')
+    (root / 'opt/jibo/Knowledge/jibo/memo.db').chmod(0o600)  # root-only, as other servers' scripts leave files
     (root / 'opt/tmp').mkdir(mode=0o700)
     (root / 'opt/tmp').chmod(0o700)  # as a user's own mkdir over SSH leaves it
     return root
@@ -206,6 +207,7 @@ def test_pm_downloads_everything_then_queues_one_update(robot, variant):
     assert (creds['endpoint'], creds['accessKeyId']) == ('http://joap.5x1.com:80', 'fixture-key')
     assert json.loads((robot / 'var/jibo/mode.json').read_text())['mode'] == 'normal'
     assert (robot / 'opt/tmp').stat().st_mode & 0o777 == 0o777, 'Be (uid 2000) must be able to use /opt/tmp'
+    assert (robot / 'opt/jibo/Knowledge/jibo/memo.db').stat().st_mode & 0o777 == 0o777, 'Be must be able to use /opt/jibo'
     assert 'restarts' in result.stdout
 
 
